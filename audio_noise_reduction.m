@@ -4,9 +4,16 @@ function [ audio_output, filt_pts, smooth_pts ] = audio_noise_reduction( flags, 
 Nsamp = length(audio_input);
 
 % Create some initial particles
-init_ref = mvnrnd(zeros(params.Np,params.ARO) , params.init_ref_vr*eye(params.ARO))';
+init_ref = inf(params.ARO,params.Np);
+for ii = 1:params.Np
+for pp = 1:params.ARO
+    while abs(init_ref(pp,ii))>1
+        init_ref(pp,ii) = normrnd(0, sqrt(params.init_ref_vr));
+    end
+end
+end
 init_ar = num2cell([ step_up(init_ref);
-                      mvnrnd(params.init_logprocvar_mn*ones(params.Np,1), params.init_logprocvar_vr)'] , 1)';
+                     exp(normrnd(params.init_logprocvar_mn*zeros(1,params.Np), sqrt(params.init_logprocvar_vr)))] , 1)';
 filt_pts = struct('nonlin_samp', init_ar, 'lin_mn', zeros(params.ARO,1), 'lin_vr', 1E-20*eye(params.ARO));
 
 % Block loop
@@ -30,6 +37,7 @@ for bb = 1%:NB
     % Run filter
     [ filt_est, filt_pts ] = rb_filter( flags, params, last_state_prev_pts, audio_input(block_start:block_end) );
     [ filt_pts ] = rts_particles(flags, params, filt_pts);
+    
     filt_SNR = SNR(true_audio, filt_est);
     figure, hold on, plot(true_audio), plot(filt_est, 'r');
     filt_player = audioplayer(filt_est, params.fs);
@@ -39,6 +47,10 @@ for bb = 1%:NB
     figure, hold on, plot(true_audio), plot(filt_pts(1).back_mn(1,:), 'r');
     KitSmooth_player = audioplayer(filt_pts(1).back_mn(1,:), params.fs);
     play(KitSmooth_player);
+    
+    nonlin_samps = mean(cat(3, filt_pts.nonlin_samp), 3);
+    figure, plot(nonlin_samps(1:end-1,:)')
+    figure, plot(log(nonlin_samps(end,:)))
     
     filt_pts_arr{bb} = filt_pts;
     

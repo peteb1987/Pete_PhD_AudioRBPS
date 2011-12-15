@@ -28,8 +28,8 @@ if nargin < 4
     new_proc_vr = exp( log_change_mn + log_change );
     assert(isreal(new_proc_vr));
     
-    % LOWER LIMIT THE PROCESS VARIANCE - FUDGE
-    new_proc_vr = max(new_proc_vr, 1E-8);
+%     % LOWER LIMIT THE PROCESS VARIANCE - FUDGE
+%     new_proc_vr = max(new_proc_vr, 1E-8);
     
     % Concatenate nonlinear state
     new_nonlin_samp = [new_ar; new_proc_vr];
@@ -57,9 +57,9 @@ if nargout > 1
     
 end
 
-% if any(abs(roots([1, -new_ar']))>1)
-%     warning('Not stable!');
-% end
+if any(abs(roots(fliplr([1, -new_ar'])))>1)
+    warning('Not stable!');
+end
 
 end
 

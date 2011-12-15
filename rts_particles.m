@@ -38,7 +38,7 @@ for ii = 1:Np
         
     end
     
-    [back_mn, back_vr] = rts_smooth(forw_mn, forw_vr, A, Q);
+    [back_mn(:,P:end), back_vr(:,:,P:end)] = rts_smooth(forw_mn(:,P:end), forw_vr(:,:,P:end), A(:,:,P:end), Q(:,:,P:end));
     pts(ii).back_mn = back_mn;
     pts(ii).back_vr = back_vr;
     

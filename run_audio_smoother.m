@@ -19,12 +19,12 @@ params.ARO = 6;                         % Order of AR model
 params.Np = 20;                         % Number of filtering particles
 params.Ns = 2;                         % Number of smoothing trajectories
 params.block_length = 1E10;              % Length of processing blocks
-params.init_ref_vr = 0.01;              % Prior variance for reflection coefficients
-params.init_logprocvar_mn = 1E-6;       % Prior mean for log of process variance
-params.init_logprocvar_vr = 1E-20;       % Prior variance for log of process variance
+params.init_ref_vr = 0.5;              % Prior variance for reflection coefficients
+params.init_logprocvar_mn = -2;       % Prior mean for log of process variance
+params.init_logprocvar_vr = 0.5;       % Prior variance for log of process variance
 params.procvar_decay = 0.995;          % Decay coefficient on log of process variance
-params.logprocvar_vr = 1E-6;            % Transition variance of log of process variance
-params.ref_trans_vr = 1E-4;            % Transition variance of reflection coefficients
+params.logprocvar_vr = 5E-4;            % Transition variance of log of process variance
+params.ref_trans_vr = 5E-3;            % Transition variance of reflection coefficients
 params.K = 2*params.fs;
 
 % Get an audio wav file
