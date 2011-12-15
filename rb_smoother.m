@@ -21,13 +21,13 @@ for ss = 1:Ns
     smooth_pts(ss).lin_mn = [];
     
     % Loop backwards in time
-    for kk = K-params.ARO:-1:2
+    for kk = K-params.ARO:-1:params.ARO
         
         if mod(kk,100)==0
             fprintf(1, '*** Time point %u.\n', kk)
         end
         
-        P = min(params.ARO, kk-1);
+        P = min(params.ARO, kk);
         
         % Calculate the sampling weights
         sampling_weights = zeros(Np, 1);
@@ -39,32 +39,38 @@ for ss = 1:Ns
             [~, trans_prob] = sample_nonlin_transdens(flags, params, filt_pts(jj).nonlin_samp(:,kk-1), smooth_pts(ss).nonlin_samp(:,kk));
             sampling_weights(jj) = sampling_weights(jj) + trans_prob;
             
-            % Kalman smoother recursions - P-step backward prediction
-            pred_mn = smooth_pts(ss).back_lin_mn(1:P,kk+P);
-            pred_vr = smooth_pts(ss).back_lin_vr(1:P,1:P,kk+P);
-            sum_log_det_A = 0;
-            for pp = P:-1:1
-                [A, Q] = construct_transmats(flags, params, filt_pts(jj).nonlin_samp(1:P,kk+pp), filt_pts(jj).nonlin_samp(params.ARO+1,kk+pp));
-                [pred_mn, pred_vr] = kf_predict(pred_mn, pred_vr, inv(A), (A\Q/A'));
-                sum_log_det_A = sum_log_det_A + log(det(A));
-            end
-            pred_vr = (pred_vr+pred_vr')/2;
+%             % Kalman smoother recursions - P-step backward prediction
+%             pred_mn = smooth_pts(ss).back_lin_mn(1:P,kk+P);
+%             pred_vr = smooth_pts(ss).back_lin_vr(1:P,1:P,kk+P);
+%             sum_log_det_A = 0;
+%             for pp = P:-1:1
+%                 [A, Q] = construct_transmats(flags, params, filt_pts(jj).nonlin_samp(1:P,kk+pp), filt_pts(jj).nonlin_samp(params.ARO+1,kk+pp));
+%                 [pred_mn, pred_vr] = kf_predict(pred_mn, pred_vr, inv(A), (A\Q/A'));
+%                 sum_log_det_A = sum_log_det_A + log(det(A));
+%             end
+%             pred_vr = (pred_vr+pred_vr')/2;
 %             assert(isposdef(pred_vr));
 %             assert(isposdef(filt_pts(jj).lin_vr(1:P,1:P,kk)+pred_vr));
             
-            % Linear probability
-            test_vr = filt_pts(jj).lin_vr(1:P,1:P,kk)+pred_vr;
-            test_mn = filt_pts(jj).lin_mn(1:P,kk) - pred_mn;
-            if cond(test_vr)<1E18
-                lin_prob = log( mvnpdf( zeros(1,P), test_mn', test_vr) );
-            else
-                s1 = 1:2; s2 = 3:6;
-                mn1 = test_mn(s1); mn2 = test_mn(s2);
-                vr1 = test_vr(s1,s1); vr2 = test_vr(s2,s2); cv = test_vr(s1,s2);
-                cond_mn2 = mn2 + cv'*( vr1\mn1 );
-                cond_vr2 = vr2 - cv'*( vr1\cv );
-                lin_prob = log(mvnpdf(zeros(size(mn1')), mn1', vr1)) + log(mvnpdf(zeros(size(cond_mn2')), cond_mn2', cond_vr2));
+%             test_vr = filt_pts(jj).lin_vr(1:P,1:P,kk)+pred_vr;
+%             test_mn = filt_pts(jj).lin_mn(1:P,kk) - pred_mn;
+%             lin_prob = log( mvnpdf( zeros(1,P), test_mn', test_vr) );
+
+            % P-step forward prediction
+            pred_mn = filt_pts(jj).lin_mn(1:P,kk);
+            pred_vr = smooth_pts(ss).back_lin_vr(1:P,1:P,kk);
+            sum_log_det_A = 0;
+            for pp = 1:P
+                [A, Q] = construct_transmats(flags, params, smooth_pts(ss).nonlin_samp(1:P,kk+pp), smooth_pts(ss).nonlin_samp(params.ARO+1,kk+pp));
+                [pred_mn, pred_vr] = kf_predict(pred_mn, pred_vr, A, Q);
+                sum_log_det_A = sum_log_det_A + log(abs(det(A)));
             end
+            pred_vr = (pred_vr+pred_vr')/2;
+            
+            % Linear probability
+            test_vr = smooth_pts(ss).back_lin_vr(1:P,1:P,kk+P)+pred_vr;
+            test_mn = smooth_pts(ss).back_lin_mn(1:P,kk+P) - pred_mn;
+            lin_prob = log( mvnpdf( zeros(1,P), test_mn', test_vr) );
             
             % Add up weights
             sampling_weights(jj) = sampling_weights(jj) ...
@@ -77,8 +83,8 @@ for ss = 1:Ns
         samp_ind = randsample(Np, 1, true, exp(sampling_weights));
         smooth_pts(ss).nonlin_samp(:, 1:kk-1) = filt_pts(samp_ind).nonlin_samp(:, 1:kk-1);
         
-        % Kalman smoother recursions
-        [A, Q] = construct_transmats(flags, params, filt_pts(samp_ind).nonlin_samp(1:P,kk+P), filt_pts(samp_ind).nonlin_samp(params.ARO+1,kk+P));
+        % Backwards Kalman smoother update
+        [A, Q] = construct_transmats(flags, params, smooth_pts(ss).nonlin_samp(1:P,kk+P), smooth_pts(ss).nonlin_samp(params.ARO+1,kk+P));
         [pred_mn, pred_vr] = kf_predict(smooth_pts(ss).back_lin_mn(1:P,kk+P), smooth_pts(ss).back_lin_vr(1:P,1:P,kk+P), inv(A), A\Q/A');
         H = [zeros(1, P-1) 1];
         R = params.noise_vr;
