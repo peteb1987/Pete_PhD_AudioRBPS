@@ -48,12 +48,27 @@ for ss = 1:Ns
                 [pred_mn, pred_vr] = kf_predict(pred_mn, pred_vr, inv(A), (A\Q/A'));
                 sum_log_det_A = sum_log_det_A + log(det(A));
             end
-            assert(isposdef(pred_vr));
+            pred_vr = (pred_vr+pred_vr')/2;
+%             assert(isposdef(pred_vr));
 %             assert(isposdef(filt_pts(jj).lin_vr(1:P,1:P,kk)+pred_vr));
             
-            % Linear probability bit
+            % Linear probability
+            test_vr = filt_pts(jj).lin_vr(1:P,1:P,kk)+pred_vr;
+            test_mn = filt_pts(jj).lin_mn(1:P,kk) - pred_mn;
+            if cond(test_vr)<1E18
+                lin_prob = log( mvnpdf( zeros(1,P), test_mn', test_vr) );
+            else
+                s1 = 1:2; s2 = 3:6;
+                mn1 = test_mn(s1); mn2 = test_mn(s2);
+                vr1 = test_vr(s1,s1); vr2 = test_vr(s2,s2); cv = test_vr(s1,s2);
+                cond_mn2 = mn2 + cv'*( vr1\mn1 );
+                cond_vr2 = vr2 - cv'*( vr1\cv );
+                lin_prob = log(mvnpdf(zeros(size(mn1')), mn1', vr1)) + log(mvnpdf(zeros(size(cond_mn2')), cond_mn2', cond_vr2));
+            end
+            
+            % Add up weights
             sampling_weights(jj) = sampling_weights(jj) ...
-                + log( mvnpdf(filt_pts(jj).lin_mn(1:P,kk)', pred_mn', filt_pts(jj).lin_vr(1:P,1:P,kk)+pred_vr) )...
+                + lin_prob ...
                 - sum_log_det_A;
             
         end
@@ -70,8 +85,8 @@ for ss = 1:Ns
         [smooth_pts(ss).back_lin_mn(1:P,kk+P-1), smooth_pts(ss).back_lin_vr(1:P,1:P,kk+P-1)] = kf_update_1D(pred_mn, pred_vr, observs(kk), H, R);
 %         H = eye(P); R = params.noise_vr*eye(P);
 %         [smooth_pts(ss).back_lin_mn(1:P,kk-1), smooth_pts(ss).back_lin_vr(1:P,1:P,kk-1)] = kf_update(pred_mn, pred_vr, observs(kk-P:kk-1), H, R);
-        smooth_pts(ss).back_lin_vr(1:P,1:P,kk-1) = (smooth_pts(ss).back_lin_vr(1:P,1:P,kk-1)+smooth_pts(ss).back_lin_vr(1:P,1:P,kk-1)')/2;
-        assert(isposdef(smooth_pts(ss).back_lin_vr(1:P,1:P,kk-1)));
+        smooth_pts(ss).back_lin_vr(1:P,1:P,kk+P-1) = (smooth_pts(ss).back_lin_vr(1:P,1:P,kk+P-1)+smooth_pts(ss).back_lin_vr(1:P,1:P,kk+P-1)')/2;
+        assert(isposdef(smooth_pts(ss).back_lin_vr(1:P,1:P,kk+P-1)));
         
     end
     

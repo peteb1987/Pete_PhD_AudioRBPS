@@ -1,6 +1,8 @@
 function [ ref ] = step_down( ar )
 %STEP_DOWN Levinson step-down recursion
 
+ar = -ar;
+
 [P, N] = size(ar);
 ref = zeros(size(ar));
 

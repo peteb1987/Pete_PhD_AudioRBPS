@@ -14,6 +14,7 @@ for jj = 0:P-1
     ar(jj+1,:) = ref(jj+1,:);
 end
 
+ar = -ar;
 
 end
 

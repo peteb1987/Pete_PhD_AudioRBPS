@@ -30,6 +30,9 @@ if nargin < 4
     
 %     % LOWER LIMIT THE PROCESS VARIANCE - FUDGE
 %     new_proc_vr = max(new_proc_vr, 1E-8);
+    if new_proc_vr<1E-10
+        warning('Teeny Weeny Process Variance!!');
+    end
     
     % Concatenate nonlinear state
     new_nonlin_samp = [new_ar; new_proc_vr];
@@ -57,7 +60,7 @@ if nargout > 1
     
 end
 
-if any(abs(roots(fliplr([1, -new_ar'])))>1)
+if any(abs(roots([1, -new_ar']))>1)
     warning('Not stable!');
 end
 
