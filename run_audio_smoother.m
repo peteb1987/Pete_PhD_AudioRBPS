@@ -14,15 +14,15 @@ filename = 'TH_TED.wav';
 % Set parameters
 flags.test = true;
 params.fs = 44100;                      % Audio sampling frequency
-params.noise_vr = 0.0005;               % Noise variance
-params.ARO = 6;                         % Order of AR model
+params.noise_vr = 0.0002;               % Noise variance
+params.ARO = 1;                         % Order of AR model
 params.Np = 20;                         % Number of filtering particles
-params.Ns = 2;                         % Number of smoothing trajectories
+params.Ns = 1;                         % Number of smoothing trajectories
 params.block_length = 1E10;              % Length of processing blocks
 params.init_ref_vr = 0.5;              % Prior variance for reflection coefficients
-params.init_logprocvar_mn = -10;       % Prior mean for log of process variance
-params.init_logprocvar_vr = 0.5;       % Prior variance for log of process variance
-params.procvar_decay = 0.99995;          % Decay coefficient on log of process variance
+params.init_logprocvar_mn = -5;       % Prior mean for log of process variance
+params.init_logprocvar_vr = 0.1;       % Prior variance for log of process variance
+params.procvar_decay = 0.995;          % Decay coefficient on log of process variance
 params.logprocvar_vr = 5E-3;            % Transition variance of log of process variance
 params.ref_trans_vr = 5E-3;            % Transition variance of reflection coefficients
 params.K = 2*params.fs;
@@ -58,7 +58,7 @@ input_SNR = SNR(true_audio, noisy_audio);
 %%
 
 % Call filter/smoother algorithm
-[est_audio, pts] = audio_noise_reduction(flags, params, noisy_audio, true_audio );
+[est_audio, filt_pts, smooth_pts] = audio_noise_reduction(flags, params, noisy_audio, true_audio );
 
 % % Measure SNR
 % output_SNR = SNR(true_audio, est_audio);

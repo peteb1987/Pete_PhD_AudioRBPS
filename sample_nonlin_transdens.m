@@ -24,15 +24,18 @@ if nargin < 4
     new_ar = step_up(new_ref);
     
     % Sample process var
-    log_change = normrnd(0, sqrt(params.logprocvar_vr));
-    new_proc_vr = exp( log_change_mn + log_change );
+    log_change = -inf;
+    while log_change_mn + log_change < -10
+        log_change = normrnd(0, sqrt(params.logprocvar_vr));
+        new_proc_vr = exp( log_change_mn + log_change );
+    end
     assert(isreal(new_proc_vr));
     
 %     % LOWER LIMIT THE PROCESS VARIANCE - FUDGE
 %     new_proc_vr = max(new_proc_vr, 1E-8);
-    if new_proc_vr<1E-12
-        warning('Teeny Weeny Process Variance!!');
-    end
+%     if new_proc_vr<1E-15
+%         warning('Teeny Weeny Process Variance!!');
+%     end
     
     % Concatenate nonlinear state
     new_nonlin_samp = [new_ar; new_proc_vr];
@@ -51,12 +54,15 @@ end
 if nargout > 1
     
     % Calculate probability
-    prob = log(normpdf(log_change, 0, sqrt(params.logprocvar_vr)));
-    for jj = 1:length(new_ref)
-        prob = prob + log( normpdf(new_ref(jj), old_ref(jj), sqrt(params.ref_trans_vr)) );
-        Z = normcdf(1, old_ref(jj), sqrt(params.ref_trans_vr)) - normcdf(-1, old_ref(jj), sqrt(params.ref_trans_vr));
-        prob = prob - log(Z);
-    end
+    procvar_prob = log(normpdf(log_change, 0, sqrt(params.logprocvar_vr)));
+%     for jj = 1:length(new_ref)
+%         prob = prob + log( normpdf(new_ref(jj), old_ref(jj), sqrt(params.ref_trans_vr)) );
+%         Z = normcdf(1, old_ref(jj), sqrt(params.ref_trans_vr)) - normcdf(-1, old_ref(jj), sqrt(params.ref_trans_vr));
+%         prob = prob - log(Z);
+%     end
+    ref_prob = log( normpdf(new_ref, old_ref, sqrt(params.ref_trans_vr)) );
+    norm_consts = log( normcdf(ones(size(old_ref)), old_ref, sqrt(params.ref_trans_vr)) - normcdf(-ones(size(old_ref)), old_ref, sqrt(params.ref_trans_vr)) );
+    prob = procvar_prob + sum(ref_prob) - sum(norm_consts);
     
 end
 

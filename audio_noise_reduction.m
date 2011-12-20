@@ -13,7 +13,7 @@ for pp = 1:params.ARO
 end
 end
 init_ar = num2cell([ step_up(init_ref);
-                     exp(normrnd(params.init_logprocvar_mn*zeros(1,params.Np), sqrt(params.init_logprocvar_vr)))] , 1)';
+                     exp(normrnd(params.init_logprocvar_mn*ones(1,params.Np), sqrt(params.init_logprocvar_vr)))] , 1)';
 filt_pts = struct('nonlin_samp', init_ar, 'lin_mn', zeros(params.ARO,1), 'lin_vr', 1E-20*eye(params.ARO));
 
 % Block loop
@@ -35,31 +35,33 @@ for bb = 1%:NB
     end
     
     % Run filter
-    [ filt_est, filt_pts ] = rb_filter( flags, params, last_state_prev_pts, audio_input(block_start:block_end) );
-    [ filt_pts ] = rts_particles(flags, params, filt_pts);
+    [ filt_est, final_filt_pts, filt_pts, filt_weights ] = rb_filter( flags, params, last_state_prev_pts, audio_input(block_start:block_end) );
+    [ final_filt_pts ] = rts_particles(flags, params, final_filt_pts);
     
     filt_SNR = SNR(true_audio, filt_est);
     figure, hold on, plot(true_audio), plot(filt_est, 'r');
     filt_player = audioplayer(filt_est, params.fs);
     play(filt_player);
     
-    KitSmooth_SNR = SNR(true_audio, filt_pts(1).back_mn(1,:)');
-    figure, hold on, plot(true_audio), plot(filt_pts(1).back_mn(1,:), 'r');
-    KitSmooth_player = audioplayer(filt_pts(1).back_mn(1,:), params.fs);
+    KitSmooth_SNR = SNR(true_audio, final_filt_pts(1).smooth_mn(1,:)');
+    figure, hold on, plot(true_audio), plot(final_filt_pts(1).smooth_mn(1,:), 'r');
+    KitSmooth_player = audioplayer(final_filt_pts(1).smooth_mn(1,:), params.fs);
     play(KitSmooth_player);
     
-    nonlin_samps = mean(cat(3, filt_pts.nonlin_samp), 3);
+    nonlin_samps = mean(cat(3, final_filt_pts.nonlin_samp), 3);
     figure, plot(nonlin_samps(1:end-1,:)')
     figure, plot(log(nonlin_samps(end,:)))
     
-    filt_pts_arr{bb} = filt_pts;
+    filt_pts_arr{bb} = final_filt_pts;
     
     %Run smoother
-    [ smooth_pts ] = rb_smoother( flags, params, filt_pts, audio_input(block_start:block_end) );
+    [ smooth_pts ] = rb_smoother( flags, params, filt_pts, filt_weights, audio_input(block_start:block_end) );
+    [ smooth_pts ] = rts_particles(flags, params, smooth_pts, audio_input, zeros(params.ARO,1), 1E-20*eye(params.ARO));
     
-    RBPS_SNR = SNR(true_audio, smooth_pts(1).back_mn(1,:)');
-    figure, hold on, plot(true_audio), plot(smooth_pts(1).back_mn(1,:), 'r');
-    RBPS_player = audioplayer(smooth_pts(1).back_mn(1,:), params.fs);
+    smooth_lin_mn = mean(cat(3, smooth_pts.smooth_mn), 3);
+    RBPS_SNR = SNR(true_audio, smooth_lin_mn(1,:)');
+    figure, hold on, plot(true_audio), plot(smooth_lin_mn(1,:), 'r');
+    RBPS_player = audioplayer(smooth_lin_mn(1,:), params.fs);
     play(RBPS_player);
     
     % Join block smoothing trajectories

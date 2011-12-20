@@ -1,4 +1,4 @@
-function [ lin_mn_est, pts ] = rb_filter( flags, params, init_pts, observs )
+function [ lin_mn_est, pts, pts_array, weights ] = rb_filter( flags, params, init_pts, observs )
 %RB_FILTER Rao-Blackwellised particle filter
 
 Np = params.Np;
@@ -7,6 +7,9 @@ Np = params.Np;
 pts = init_pts;
 K = length(observs);
 weights = cell(K,1);
+preESS = zeros(K,1);
+postESS = zeros(K,1);
+num_resam = 0;
 last_weights = zeros(Np, 1);
 lin_mn_est = zeros(size(observs));
 
@@ -15,14 +18,16 @@ for ii = 1:Np
     pts(ii).lin_mn = [pts(ii).lin_mn, repmat(zeros(params.ARO,1), [1 K-1])];
     pts(ii).nonlin_samp = [pts(ii).nonlin_samp, repmat(zeros(params.ARO+1,1), [1 K-1])];
 end
-    
+pts_array = pts;
+
 tic;
 
 % Loop through time
 for kk = 1:K
     
     if mod(kk,100)==0
-        fprintf(1, '*** Time point %u. Last 100 took %f s.\n', kk, toc)
+        fprintf(1, '*** Time point %u. Last 100 took %f s with %u resampling steps.\n', kk, toc, num_resam)
+        num_resam = 0;
         tic;
     end
     
@@ -68,10 +73,15 @@ for kk = 1:K
     
     
     % Systematic resampling
-    if ESS(weights{kk})<0.5*Np
+    preESS(kk) = ESS(weights{kk});
+    if preESS(kk)<Np * 1
         [ ~, parent ] = systematic_resample( exp(weights{kk}), Np );
         pts = pts(parent);
         weights{kk} = log(ones(Np,1)/Np);
+        postESS(kk) = Np;
+        num_resam = num_resam + 1;
+    else
+        postESS(kk) = preESS(kk);
     end
     
     % Store last weights for next time
@@ -80,9 +90,16 @@ for kk = 1:K
 %     lin_mn_est = sum(multiprod(cat(3, pts.lin_mn), exp(last_weights), 3, 1), 3);
     lin_mn_est(kk) = sum(arrayfun(@(x,y) y*x.lin_mn(1,kk), pts, exp(last_weights)));
     
+    for ii = 1:Np
+        pts_array(ii).nonlin_samp(:,kk) = pts(ii).nonlin_samp(:,kk);
+        pts_array(ii).lin_mn(:,kk) = pts(ii).lin_mn(:,kk);
+        pts_array(ii).lin_vr(:,:,kk) = pts(ii).lin_vr(:,:,kk);
+    end
+
 end
 
 % lin_mn_est = [lin_mn_est(params.ARO+1:end); zeros(params.ARO,1)];
+figure, plot(preESS);
 
 end
 
