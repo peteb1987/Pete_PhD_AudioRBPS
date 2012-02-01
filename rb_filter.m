@@ -1,24 +1,26 @@
-function [ lin_mn_est, pts, pts_array, weights ] = rb_filter( flags, params, init_pts, observs )
+function [ est, pts_store, final_filt_pts, wts_array ] = rb_filter( flags, params, init_pts, observs )
 %RB_FILTER Rao-Blackwellised particle filter
 
-Np = params.Np;
-
 % Initialise some things
-pts = init_pts;
+Np = params.Np;
 K = length(observs);
-weights = cell(K,1);
+
+pts = init_pts;
+wts_array = cell(K,1);
+est = zeros(K,1);
+
 preESS = zeros(K,1);
 postESS = zeros(K,1);
 num_resam = 0;
 last_weights = zeros(Np, 1);
-lin_mn_est = zeros(size(observs));
 
+% Extend particles
 for ii = 1:Np
     pts(ii).lin_vr = cat(3, pts(ii).lin_vr, repmat(1E-20*eye(params.ARO), [1 1 K-1]));
     pts(ii).lin_mn = [pts(ii).lin_mn, repmat(zeros(params.ARO,1), [1 K-1])];
     pts(ii).nonlin_samp = [pts(ii).nonlin_samp, repmat(zeros(params.ARO+1,1), [1 K-1])];
 end
-pts_array = pts;
+pts_store = pts;
 
 tic;
 
@@ -31,7 +33,7 @@ for kk = 1:K
         tic;
     end
     
-    weights{kk} = zeros(Np, 1);
+    weights = zeros(Np, 1);
     
     % Get the index of the last time. This ensures that the time 0 prior is overwritten
     last_idx = max(1,kk-1);
@@ -43,8 +45,6 @@ for kk = 1:K
         prev_nonlin_samp = pts(ii).nonlin_samp(:,last_idx);
         prev_lin_mn = pts(ii).lin_mn(1:P,last_idx);
         prev_lin_vr = pts(ii).lin_vr(1:P,1:P,last_idx);
-%         pts(ii).lin_vr(:,:,kk) = 1E-20*eye(params.ARO);
-        
         
         % Propose new nonlinear state (from transition density)
         pts(ii).nonlin_samp(:,kk) = sample_nonlin_transdens(flags, params, prev_nonlin_samp);
@@ -52,32 +52,31 @@ for kk = 1:K
         % Run Kalman filter
         [A, Q] = construct_transmats(flags, params, pts(ii).nonlin_samp(1:P,kk), pts(ii).nonlin_samp(params.ARO+1,kk));
         [pred_mn, pred_vr] = kf_predict(prev_lin_mn, prev_lin_vr, A, Q);
-        assert(isposdef(pred_vr));
+        
         H = [1 zeros(1, P-1)];
         R = params.noise_vr;
         [pts(ii).lin_mn(1:P,kk), pts(ii).lin_vr(1:P,1:P,kk), ~, ~, ~, pred_lhood] = kf_update_1D(pred_mn, pred_vr, observs(kk), H, R);
-%         H = eye(P); R = params.noise_vr*eye(P);
-%         [pts(ii).lin_mn(1:P,kk), pts(ii).lin_vr(1:P,1:P,kk), ~, ~, ~, pred_lhood] = kf_update(pred_mn, pred_vr, observs(kk-P+1:kk), H, R);
         pts(ii).lin_vr(1:P,1:P,kk) = (pts(ii).lin_vr(1:P,1:P,kk)+pts(ii).lin_vr(1:P,1:P,kk)')/2;
+        
+        assert(isposdef(pred_vr));
         assert(isreal(pred_lhood));
         assert(isposdef(pts(ii).lin_vr(1:P,1:P,kk)));
         
         % Update weight
-        weights{kk}(ii) = last_weights(ii) + log(pred_lhood);
+        weights(ii) = last_weights(ii) + log(pred_lhood);
         
     end
     
     % Normalise weights
-    lin_weights = exp(weights{kk}); lin_weights = lin_weights/sum(lin_weights);
-    weights{kk} = log(lin_weights);
-    
+    lin_weights = exp(weights); lin_weights = lin_weights/sum(lin_weights);
+    weights = log(lin_weights);
     
     % Systematic resampling
-    preESS(kk) = ESS(weights{kk});
-    if preESS(kk)<Np * 1
-        [ ~, parent ] = systematic_resample( exp(weights{kk}), Np );
+    preESS(kk) = ESS(weights);
+    if preESS(kk)<Np * params.resam_thresh
+        [ ~, parent ] = systematic_resample( exp(weights), Np );
         pts = pts(parent);
-        weights{kk} = log(ones(Np,1)/Np);
+        weights = log(ones(Np,1)/Np);
         postESS(kk) = Np;
         num_resam = num_resam + 1;
     else
@@ -85,21 +84,22 @@ for kk = 1:K
     end
     
     % Store last weights for next time
-    last_weights = weights{kk};
+    last_weights = weights;
     
-%     lin_mn_est = sum(multiprod(cat(3, pts.lin_mn), exp(last_weights), 3, 1), 3);
-    lin_mn_est(kk) = sum(arrayfun(@(x,y) y*x.lin_mn(1,kk), pts, exp(last_weights)));
-    
+    % Store particles and weights
     for ii = 1:Np
-        pts_array(ii).nonlin_samp(:,kk) = pts(ii).nonlin_samp(:,kk);
-        pts_array(ii).lin_mn(:,kk) = pts(ii).lin_mn(:,kk);
-        pts_array(ii).lin_vr(:,:,kk) = pts(ii).lin_vr(:,:,kk);
-    end
+        pts_store(ii).nonlin_samp(:,kk) = pts(ii).nonlin_samp(:,kk);
+        pts_store(ii).lin_mn(:,kk) = pts(ii).lin_mn(:,kk);
+        pts_store(ii).lin_vr(:,:,kk) = pts(ii).lin_vr(:,:,kk);
+    end 
+    wts_array{kk} = weights;
+    
+    % Store latest linear mean for filtering estimate
+    est(kk) = sum(arrayfun(@(x,y) y*x.lin_mn(1,kk), pts, exp(last_weights)));
 
 end
 
-% lin_mn_est = [lin_mn_est(params.ARO+1:end); zeros(params.ARO,1)];
-figure, plot(preESS);
+final_filt_pts = pts;
 
 end
 
