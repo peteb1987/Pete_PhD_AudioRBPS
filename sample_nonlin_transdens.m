@@ -25,7 +25,7 @@ if nargin < 4
     
     % Sample process var
     log_change = -inf;
-    while log_change_mn + log_change < -10
+    while log_change_mn + log_change < params.min_log_proc_var
         log_change = normrnd(0, sqrt(params.logprocvar_vr));
         new_proc_vr = exp( log_change_mn + log_change );
     end
